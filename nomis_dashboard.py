@@ -174,8 +174,9 @@ ind  = load_industry_data()
 #  SIDEBAR
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/en/thumb/3/3e/Westminster_City_Council_logo.svg/320px-Westminster_City_Council_logo.svg.png",
-             width=160)
+    st.markdown("## 🏛️ Westminster City Council")
+🏛️ Westminster City Council
+### 🏛️ WCC Census 2021
     st.markdown("### 🏛️ WCC Census 2021")
     st.markdown("---")
 
