@@ -355,7 +355,7 @@ def load_real_census_from_nomis():
         # Unemployment = any category containing 'Unemployed'
         unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
 
-        out = (
+                out = (
             df.groupby("geography_name")
             .apply(
                 lambda g: pd.Series(
@@ -372,7 +372,18 @@ def load_real_census_from_nomis():
             .reset_index()
             .rename(columns={"geography_name": "Ward"})
         )
+
+        # Normalise '&' vs 'and' so Nomis names match hard-coded ward names
+        def normalise_ward_name(name: str) -> str:
+            if not isinstance(name, str):
+                return name
+            n = name.strip()
+            n = n.replace(" and ", " & ")
+            return n
+
+        out["Ward"] = out["Ward"].apply(normalise_ward_name)
         return out
+        
 
     # Add further helpers (TS067, TS054, etc.) and merge as you extend.
     emp = get_ts066_employment()
@@ -394,12 +405,26 @@ def load_imd_and_census():
     # -------------------------------------------------------------------------
     imd = {
         "Ward": [
-            "Church Street", "Westbourne", "Queen's Park", "Harrow Road",
-            "Pimlico South", "Pimlico North", "Maida Vale", "Little Venice",
-            "Hyde Park", "St James's", "Vincent Square", "Lancaster Gate",
-            "West End", "Bayswater", "Knightsbridge & Belgravia",
-            "Marylebone", "Abbey Road", "Regent's Park"
+            "Westbourne",
+            "Church Street",
+            "Queen's Park",
+            "Harrow Road",
+            "Pimlico South",
+            "Vincent Square",
+            "Pimlico North",
+            "Maida Vale",
+            "St James's",
+            "Bayswater",
+            "Little Venice",
+            "West End",
+            "Hyde Park",
+            "Lancaster Gate",
+            "Abbey Road",
+            "Knightsbridge & Belgravia",
+            "Marylebone",
+            "Regent's Park",
         ],
+
         # IMD 2025 - higher score = more deprived relative to rest of England
         "IMD 2025 Score": [
             46.18, 39.80, 36.48, 34.60, 28.12, 24.53, 23.27, 21.75,
@@ -488,6 +513,33 @@ def load_imd_and_census():
     )
     return out
 
+# Load all data
+df   = load_imd_and_census()
+ages = load_age_profile()
+ind  = load_industry_mix()
+geo  = load_geojson()
+
+# Hard-coded ward order (for filters, charts, tables)
+WARDS = [
+    "Westbourne",
+    "Church Street",
+    "Queen's Park",
+    "Harrow Road",
+    "Pimlico South",
+    "Vincent Square",
+    "Pimlico North",
+    "Maida Vale",
+    "St James's",
+    "Bayswater",
+    "Little Venice",
+    "West End",
+    "Hyde Park",
+    "Lancaster Gate",
+    "Abbey Road",
+    "Knightsbridge & Belgravia",
+    "Marylebone",
+    "Regent's Park",
+]
 
 # =============================================================================
 # SIDEBAR
