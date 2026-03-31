@@ -302,46 +302,69 @@ def load_real_census_from_nomis():
     """
     Pull real Census 2021 ward-level data for Westminster from the Nomis API.
 
-    Uses TS066 (economic activity), TS067 (qualifications), TS054 (tenure),
-    TS021 (ethnicity), TS037/TS038 (health), TS050 (rooms/overcrowding).
-
-    Returns a DataFrame with one row per ward and the same variable names
-    currently used in the dashboard (Employment Rate, Social Rented %, etc.).
+    Currently loads employment and unemployment; extend with more tables
+    (TS067, TS054, TS021, TS037/TS038, TS050) as needed.
     """
+
     # Westminster local authority code in Nomis (2021 wards under parent LA)
     # Replace PARENT:1946157124 if your Westminster parent code differs.
     parent_filter = "PARENT:1946157124"
 
-    def get_ts066_employment():
-        url = (
-            "https://www.nomisweb.co.uk/api/v01/dataset/NM_2066_1.data.csv"
-            "?geography=TYPE298"                    # wards
-            f"&geography_filter={parent_filter}"    # Westminster wards only
-            "&cell=1,2,3,4,5,6,7,8,9"              # all economic activity categories
-            "&measures=20100"                       # count
-            "&select=geography_name,cell_name,obs_value"
-        )
+def get_ts066_employment():
+    url = (
+        "https://www.nomisweb.co.uk/api/v01/dataset/NM_2066_1.data.csv"
+        "?time=latest"
+        "&geography=TYPE298"                    # 2022 wards
+        f"&geography_filter={parent_filter}"    # Westminster wards only
+        "&cell=1,2,3,4,5,6,7,8,9"              # all economic activity categories
+        "&measures=20100"                       # value
+        "&select=geography_name,cell_name,obs_value"
+    )
+
+    try:
         df = pd.read_csv(url)
-        tot = df.groupby("geography_name")["obs_value"].transform("sum")
-        df["pct"] = df["obs_value"] / tot * 100
-        # Example: treat 'In employment' as sum of full/part-time employees and self‑employed
-        emp_mask = df["cell_name"].isin([
-            "Employee: Full-time",
-            "Employee: Part-time",
-            "Self-employed: With employees",
-            "Self-employed: Without employees",
-        ])
-        unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
-        out = (
-            df.groupby("geography_name")
-              .apply(lambda g: pd.Series({
-                  "Employment Rate": g.loc[emp_mask & (g.index.isin(g.index)), "pct"].sum(),
-                  "Unemployment %":  g.loc[unemp_mask & (g.index.isin(g.index)), "pct"].sum(),
-              }))
-              .reset_index()
-              .rename(columns={"geography_name": "Ward"})
+    except pd.errors.EmptyDataError:
+        st.error(
+            "Nomis returned an empty response for TS066 employment.\n\n"
+            f"URL called:\n{url}\n\n"
+            "Check the dataset code, geography parameters, and whether your "
+            "Nomis API access is available."
         )
-        return out
+        return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
+
+    # If Nomis returned HTML or JSON error instead of CSV, df will have wrong columns;
+    # handle that here:
+    required_cols = {"geography_name", "cell_name", "obs_value"}
+    if not required_cols.issubset(df.columns):
+        st.error(
+            "Unexpected response format from Nomis for TS066 (employment).\n\n"
+            f"URL called:\n{url}\n\n"
+            "First few rows:\n"
+            f"{df.head().to_string(index=False)}"
+        )
+        return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
+
+    tot = df.groupby("geography_name")["obs_value"].transform("sum")
+    df["pct"] = df["obs_value"] / tot * 100
+
+    emp_mask = df["cell_name"].isin([
+        "Employee: Full-time",
+        "Employee: Part-time",
+        "Self-employed: With employees",
+        "Self-employed: Without employees",
+    ])
+    unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
+
+    out = (
+        df.groupby("geography_name")
+          .apply(lambda g: pd.Series({
+              "Employment Rate": g.loc[emp_mask & (g.index.isin(g.index)), "pct"].sum(),
+              "Unemployment %":  g.loc[unemp_mask & (g.index.isin(g.index)), "pct"].sum(),
+          }))
+          .reset_index()
+          .rename(columns={"geography_name": "Ward"})
+    )
+    return out
 
     # You would add similar small functions for TS067 (qualifications), TS054 (tenure),
     # TS021 (ethnicity), TS037/TS038 (health), TS050 (rooms/overcrowding),
@@ -439,7 +462,13 @@ def load_imd_and_census():
     # -------------------------------------------------------------------------
     census_real = load_real_census_from_nomis()
 
-    # Merge IMD ward table with real census table by ward name
+if census_real.empty:
+    st.warning(
+        "Census 2021 data could not be loaded from Nomis. "
+        "The dashboard will show IMD indicators only."
+    )
+    out = df.copy()
+else:
     out = df.merge(census_real, on="Ward", how="left")
 
     # Quintile label within WCC only (not national)
