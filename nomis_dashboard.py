@@ -296,99 +296,96 @@ def econ_h(fig, title="", subtitle="",
 # =============================================================================
 
 @st.cache_data
-
-@st.cache_data
 def load_real_census_from_nomis():
     """
     Pull real Census 2021 ward-level data for Westminster from the Nomis API.
 
-    Currently loads employment and unemployment; extend with more tables
-    (TS067, TS054, TS021, TS037/TS038, TS050) as needed.
+    Currently loads employment and unemployment (TS066). Extend with further
+    tables (TS067, TS054, TS021, TS037/TS038, TS050) as needed.
     """
-
-    # Westminster local authority code in Nomis (2021 wards under parent LA)
+    # Westminster local authority code in Nomis (wards under parent LA)
     # Replace PARENT:1946157124 if your Westminster parent code differs.
     parent_filter = "PARENT:1946157124"
 
-def get_ts066_employment():
-    url = (
-        "https://www.nomisweb.co.uk/api/v01/dataset/NM_2066_1.data.csv"
-        "?time=latest"
-        "&geography=TYPE298"                    # 2022 wards
-        f"&geography_filter={parent_filter}"    # Westminster wards only
-        "&cell=1,2,3,4,5,6,7,8,9"              # all economic activity categories
-        "&measures=20100"                       # value
-        "&select=geography_name,cell_name,obs_value"
-    )
-
-    try:
-        df = pd.read_csv(url)
-    except pd.errors.EmptyDataError:
-        st.error(
-            "Nomis returned an empty response for TS066 employment.\n\n"
-            f"URL called:\n{url}\n\n"
-            "Check the dataset code, geography parameters, and whether your "
-            "Nomis API access is available."
+    def get_ts066_employment():
+        url = (
+            "https://www.nomisweb.co.uk/api/v01/dataset/NM_2066_1.data.csv"
+            "?time=latest"
+            "&geography=TYPE298"                    # 2022 wards
+            f"&geography_filter={parent_filter}"    # Westminster wards only
+            "&cell=1,2,3,4,5,6,7,8,9"              # all economic activity categories
+            "&measures=20100"                       # value
+            "&select=geography_name,cell_name,obs_value"
         )
-        return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
 
-    # If Nomis returned HTML or JSON error instead of CSV, df will have wrong columns;
-    # handle that here:
-    required_cols = {"geography_name", "cell_name", "obs_value"}
-    if not required_cols.issubset(df.columns):
-        st.error(
-            "Unexpected response format from Nomis for TS066 (employment).\n\n"
-            f"URL called:\n{url}\n\n"
-            "First few rows:\n"
-            f"{df.head().to_string(index=False)}"
+        # Defensive load so the app does not crash if Nomis is empty or errors
+        try:
+            df = pd.read_csv(url)
+        except pd.errors.EmptyDataError:
+            st.error(
+                "Nomis returned an empty response for TS066 employment.\n\n"
+                f"URL called:\n{url}\n\n"
+                "Check the dataset code, geography parameters and your Nomis access."
+            )
+            return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
+
+        required_cols = {"geography_name", "cell_name", "obs_value"}
+        if not required_cols.issubset(df.columns):
+            st.error(
+                "Unexpected response format from Nomis for TS066 (employment).\n\n"
+                f"URL called:\n{url}\n\n"
+                "First few rows:\n"
+                f"{df.head().to_string(index=False)}"
+            )
+            return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
+
+        # Convert counts to percentages within each ward
+        tot = df.groupby("geography_name")["obs_value"].transform("sum")
+        df["pct"] = df["obs_value"] / tot * 100
+
+        # Employment = employees + self‑employed
+        emp_mask = df["cell_name"].isin(
+            [
+                "Employee: Full-time",
+                "Employee: Part-time",
+                "Self-employed: With employees",
+                "Self-employed: Without employees",
+            ]
         )
-        return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
+        # Unemployment = any category containing 'Unemployed'
+        unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
 
-    tot = df.groupby("geography_name")["obs_value"].transform("sum")
-    df["pct"] = df["obs_value"] / tot * 100
+        out = (
+            df.groupby("geography_name")
+            .apply(
+                lambda g: pd.Series(
+                    {
+                        "Employment Rate": g.loc[
+                            emp_mask & g.index.isin(g.index), "pct"
+                        ].sum(),
+                        "Unemployment %": g.loc[
+                            unemp_mask & g.index.isin(g.index), "pct"
+                        ].sum(),
+                    }
+                )
+            )
+            .reset_index()
+            .rename(columns={"geography_name": "Ward"})
+        )
+        return out
 
-    emp_mask = df["cell_name"].isin([
-        "Employee: Full-time",
-        "Employee: Part-time",
-        "Self-employed: With employees",
-        "Self-employed: Without employees",
-    ])
-    unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
-
-    out = (
-        df.groupby("geography_name")
-          .apply(lambda g: pd.Series({
-              "Employment Rate": g.loc[emp_mask & (g.index.isin(g.index)), "pct"].sum(),
-              "Unemployment %":  g.loc[unemp_mask & (g.index.isin(g.index)), "pct"].sum(),
-          }))
-          .reset_index()
-          .rename(columns={"geography_name": "Ward"})
-    )
-    return out
-
-    # You would add similar small functions for TS067 (qualifications), TS054 (tenure),
-    # TS021 (ethnicity), TS037/TS038 (health), TS050 (rooms/overcrowding),
-    # each returning Ward + the variables you need, then merge them all.
-
+    # Add further helpers (TS067, TS054, etc.) and merge as you extend.
     emp = get_ts066_employment()
 
-    # Start with employment and unemployment only; extend with more merges as you add tables.
     census = emp.copy()
-
     return census
 
+
+@st.cache_data
 def load_imd_and_census():
     """
-    Load IMD 2025 and 2019 data for Westminster's 18 wards.
-
-    IMD scores and ranks are REAL figures from MHCLG's published 2025 and 2019 indices.
-    Source: https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025
-
-    Ward boundaries: WCC 2022 ward review (18 wards).
-    National total of 6,904 wards in England used for percentile banding.
-
-    Census variables are MODELLED ESTIMATES anchored to real IMD rankings.
-    For real ward-level census data, use the Nomis API (see Data Sources page).
+    Load IMD 2025 and 2019 data for Westminster's 18 wards and merge with
+    real Census 2021 ward-level data from the Nomis API.
     """
 
     # -------------------------------------------------------------------------
@@ -449,107 +446,47 @@ def load_imd_and_census():
     # Calculated as rank / 6,904 - based on ONS 2022 ward boundaries
     # -------------------------------------------------------------------------
     def nat_ctx(rank):
-        if   rank <= TOTAL_WARDS_ENGLAND * 0.10: return "Top 10% most deprived"
-        elif rank <= TOTAL_WARDS_ENGLAND * 0.20: return "Top 20% most deprived"
-        elif rank <= TOTAL_WARDS_ENGLAND * 0.40: return "Top 40% most deprived"
-        elif rank <= TOTAL_WARDS_ENGLAND * 0.80: return "Middle 40%"
-        else:                                     return "Least deprived 20%"
+        if rank <= TOTAL_WARDS_ENGLAND * 0.10:
+            return "Top 10% most deprived"
+        elif rank <= TOTAL_WARDS_ENGLAND * 0.20:
+            return "Top 20% most deprived"
+        elif rank <= TOTAL_WARDS_ENGLAND * 0.40:
+            return "Top 40% most deprived"
+        elif rank <= TOTAL_WARDS_ENGLAND * 0.80:
+            return "Middle 40%"
+        else:
+            return "Least deprived 20%"
 
     df["National Context"] = df["IMD 2025 Rank"].apply(nat_ctx)
 
-        # -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # REAL Census 2021 ward-level data via Nomis API
     # -------------------------------------------------------------------------
     census_real = load_real_census_from_nomis()
 
-if census_real.empty:
-    st.warning(
-        "Census 2021 data could not be loaded from Nomis. "
-        "The dashboard will show IMD indicators only."
-    )
-    out = df.copy()
-else:
-    out = df.merge(census_real, on="Ward", how="left")
+    if census_real.empty:
+        st.warning(
+            "Census 2021 data could not be loaded from Nomis. "
+            "The dashboard will show IMD indicators only."
+        )
+        out = df.copy()
+    else:
+        # Merge IMD ward table with real census table by ward name
+        out = df.merge(census_real, on="Ward", how="left")
 
     # Quintile label within WCC only (not national)
     out["IMD Quintile"] = pd.qcut(
-        out["IMD 2025 Score"], q=5,
+        out["IMD 2025 Score"],
+        q=5,
         labels=[
-            "Q5 - Least deprived", "Q4", "Q3",
-            "Q2", "Q1 - Most deprived"
-        ]
+            "Q5 - Least deprived",
+            "Q4",
+            "Q3",
+            "Q2",
+            "Q1 - Most deprived",
+        ],
     )
     return out
-
-@st.cache_data
-def load_age_profile():
-    """
-    Illustrative age profile comparing Westminster to London average.
-    Source: ONS Census 2021 age structure tables (TS007).
-    Westminster figures reflect the borough-wide distribution.
-    """
-    bands = [
-        "0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39",
-        "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74",
-        "75-79", "80-84", "85+"
-    ]
-    wcc    = [5.1, 4.2, 3.8, 4.5, 9.2, 10.8, 9.5, 8.1, 7.2, 6.3, 5.5,
-              4.8, 3.9, 3.2, 2.8, 2.1, 1.5, 1.5]
-    london = [6.2, 5.5, 4.9, 5.1, 7.9, 9.8, 9.2, 7.8, 6.7, 6.0, 5.3,
-              4.5, 3.8, 3.1, 2.6, 1.9, 1.2, 1.5]
-    return pd.DataFrame({"Age Band": bands, "Westminster %": wcc, "London %": london})
-
-
-@st.cache_data
-def load_industry_mix():
-    """
-    Employment by industry - Westminster vs London.
-    Source: ONS Census 2021 industry tables (TS060).
-    """
-    ind = [
-        "Finance & Insurance", "Professional/Scientific", "Wholesale/Retail",
-        "Accommodation & Food", "Public Admin", "Education", "Health & Social",
-        "Info & Communication", "Arts & Entertainment", "Construction", "Other"
-    ]
-    return pd.DataFrame({
-        "Industry": ind,
-        "Westminster": [14.2, 16.8, 9.1, 8.3, 6.2, 5.8, 7.4, 10.5, 4.2, 3.8, 13.7],
-        "London":      [ 9.1, 12.3, 10.8, 7.9, 5.2, 7.1, 9.8,  8.4, 3.9, 4.6, 20.9],
-    })
-
-
-@st.cache_data
-def load_geojson():
-    """
-    Load pre-converted GeoJSON ward boundary file.
-    Originally converted from WCC_Wards2022_PBI.json (TopoJSON format).
-    The WCC_Wards2022_PBI.json file must be committed to the same GitHub repo
-    as this Python script for deployment to Streamlit Cloud.
-    Source: WCC GIS team - 2022 ward boundary shapefile.
-    """
-    geojson_path = os.path.join(os.path.dirname(__file__), "WCC_Wards2022_PBI.json")
-    if os.path.exists(geojson_path):
-        with open(geojson_path) as f:
-            return json.load(f)
-    return None
-
-
-# Load all data
-df   = load_imd_and_census()
-ages = load_age_profile()
-ind  = load_industry_mix()
-geo  = load_geojson()
-WARDS = sorted(df["Ward"].tolist())
-
-# Base feature set used in most modelling examples
-# Chosen to cover the four main IMD domains with minimal multicollinearity
-BASE_FEATS = ["Employment Rate", "No Qualifications %", "Social Rented %", "Overcrowding %"]
-
-ALL_CENSUS_FEATS = [
-    "Employment Rate", "No Qualifications %", "Social Rented %",
-    "Good Health %", "Overcrowding %", "Degree Level %",
-    "Owner Occupied %", "Average Age", "Unemployment %", "Long-term Illness %"
-]
 
 
 # =============================================================================
