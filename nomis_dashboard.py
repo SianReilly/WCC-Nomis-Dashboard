@@ -307,7 +307,7 @@ def load_real_census_from_nomis():
     # Replace PARENT:1946157124 if your Westminster parent code differs.
     parent_filter = "PARENT:1946157124"
 
-  unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
+unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
 
 out = (
     df.groupby("geography_name")
