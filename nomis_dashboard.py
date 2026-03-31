@@ -208,11 +208,15 @@ def load_data():
     )
 
     # National deprivation context label
-    def nat_context(rank):
-        if rank <= 1000:   return "Top 20% most deprived nationally"
-        elif rank <= 3284: return "Top 40% most deprived nationally"
-        elif rank <= 4926: return "Middle 40%"
-        else:              return "Least deprived 20% nationally"
+# CORRECT — based on 6,904 total wards in England
+TOTAL_WARDS = 6904
+
+def nat_context(rank):
+    if rank <= TOTAL_WARDS * 0.10:   return "Top 10% most deprived nationally"
+    elif rank <= TOTAL_WARDS * 0.20: return "Top 20% most deprived nationally"
+    elif rank <= TOTAL_WARDS * 0.40: return "Top 40% most deprived nationally"
+    elif rank <= TOTAL_WARDS * 0.80: return "Middle 40%"
+    else:                            return "Least deprived 20% nationally"    
     df["National Context"] = df["IMD 2025 Rank"].apply(nat_context)
 
     return df
