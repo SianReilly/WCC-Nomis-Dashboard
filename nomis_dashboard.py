@@ -175,8 +175,6 @@ ind  = load_industry_data()
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 🏛️ Westminster City Council")
-🏛️ Westminster City Council
-### 🏛️ WCC Census 2021
     st.markdown("### 🏛️ WCC Census 2021")
     st.markdown("---")
 
