@@ -307,25 +307,82 @@ def load_real_census_from_nomis():
     # Replace PARENT:1946157124 if your Westminster parent code differs.
     parent_filter = "PARENT:1946157124"
 
-unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
-
-out = (
-    df.groupby("geography_name")
-    .apply(
-        lambda g: pd.Series(
-            {
-                "Employment Rate": g.loc[
-                    emp_mask & g.index.isin(g.index), "pct"
-                ].sum(),
-                "Unemployment %": g.loc[
-                    unemp_mask & g.index.isin(g.index), "pct"
-                ].sum(),
-            }
+    def get_ts066_employment():
+        url = (
+            "https://www.nomisweb.co.uk/api/v01/dataset/NM_2066_1.data.csv"
+            "?time=latest"
+            "&geography=TYPE298"                    # 2022 wards
+            f"&geography_filter={parent_filter}"    # Westminster wards only
+            "&cell=1,2,3,4,5,6,7,8,9"              # all economic activity categories
+            "&measures=20100"                       # value
+            "&select=geography_name,cell_name,obs_value"
         )
-    )
-    .reset_index()
-    .rename(columns={"geography_name": "Ward"})
-)  
+
+        # Defensive load so the app does not crash if Nomis is empty or errors
+        try:
+            df = pd.read_csv(url)
+        except pd.errors.EmptyDataError:
+            st.error(
+                "Nomis returned an empty response for TS066 employment.\n\n"
+                f"URL called:\n{url}\n\n"
+                "Check the dataset code, geography parameters and your Nomis access."
+            )
+            return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
+
+        required_cols = {"geography_name", "cell_name", "obs_value"}
+        if not required_cols.issubset(df.columns):
+            st.error(
+                "Unexpected response format from Nomis for TS066 (employment).\n\n"
+                f"URL called:\n{url}\n\n"
+                "First few rows:\n"
+                f"{df.head().to_string(index=False)}"
+            )
+            return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
+
+        # Convert counts to percentages within each ward
+        tot = df.groupby("geography_name")["obs_value"].transform("sum")
+        df["pct"] = df["obs_value"] / tot * 100
+
+        # Employment = employees + self‑employed
+        emp_mask = df["cell_name"].isin(
+            [
+                "Employee: Full-time",
+                "Employee: Part-time",
+                "Self-employed: With employees",
+                "Self-employed: Without employees",
+            ]
+        )
+        # Unemployment = any category containing 'Unemployed'
+        unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
+
+        out = (
+            df.groupby("geography_name")
+            .apply(
+                lambda g: pd.Series(
+                    {
+                        "Employment Rate": g.loc[
+                            emp_mask & g.index.isin(g.index), "pct"
+                        ].sum(),
+                        "Unemployment %": g.loc[
+                            unemp_mask & g.index.isin(g.index), "pct"
+                        ].sum(),
+                    }
+                )
+            )
+            .reset_index()
+            .rename(columns={"geography_name": "Ward"})
+        )
+
+        # Normalise '&' vs 'and' so Nomis names match hard-coded ward names
+        def normalise_ward_name(name: str) -> str:
+            if not isinstance(name, str):
+                return name
+            n = name.strip()
+            n = n.replace(" and ", " & ")
+            return n
+
+        out["Ward"] = out["Ward"].apply(normalise_ward_name)
+        return out
         
 
     # Add further helpers (TS067, TS054, etc.) and merge as you extend.
@@ -1396,9 +1453,9 @@ elif page == "Statistical Analysis":
                     hovertemplate="<b>%{text}</b><br>Fitted: %{x:.2f}<br>Residual: %{y:.2f}<extra></extra>"
                 ))
                 fig_r.add_hline(y=0, line_color=ECON_GREY, line_dash="dash")
-                fig_r.add_hline(y= 2 * resid_base.std(), line_color=ECON_RED, line_dash="dot", line_width=1,
+                fig_r.add_hline(y= 2 * resid_base.std(), line_color=WCC_GOLD, line_dash="dot", line_width=1,
                                 annotation_text="+ 2 sd", annotation_position="right")
-                fig_r.add_hline(y=-2 * resid_base.std(), line_color=ECON_RED, line_dash="dot", line_width=1,
+                fig_r.add_hline(y=-2 * resid_base.std(), line_color=WCC_GOLD, line_dash="dot", line_width=1,
                                 annotation_text="- 2 sd", annotation_position="right")
                 fig_r = econ(fig_r, title="Residuals vs Fitted",
                              subtitle="Red = |residual| > 2 standard deviations. Random scatter = good.",
@@ -1415,7 +1472,7 @@ elif page == "Statistical Analysis":
                 fig_qq.add_trace(go.Scatter(
                     x=osm[0],
                     y=osr[1] + osr[0] * np.array(osm[0]),
-                    mode="lines", line=dict(color=ECON_RED, dash="dash"), name="Normal reference"
+                    mode="lines", line=dict(color=WCC_GOLD, dash="dash"), name="Normal reference"
                 ))
                 fig_qq = econ(
                     fig_qq, title="Q-Q Plot of Residuals",
@@ -1447,7 +1504,7 @@ elif page == "Statistical Analysis":
                 marker_color=[ECON_RED if c > thresh else TEAL for c in cooks],
                 hovertemplate="<b>%{x}</b><br>Cook's D: %{y:.4f}<extra></extra>"
             ))
-            fig_ck.add_hline(y=thresh, line_dash="dash", line_color=ECON_RED,
+            fig_ck.add_hline(y=thresh, line_dash="dash", line_color=WCC_GOLD,
                              annotation_text=f"Threshold 4/n={thresh:.3f}",
                              annotation_position="right")
             fig_ck = econ(fig_ck, title="Cook's Distance",
@@ -1510,7 +1567,7 @@ elif page == "Statistical Analysis":
             fig_cv.add_trace(go.Bar(x=list(range(1, 6)), y=kf_lr,
                                     name="Linear Regression", marker_color=WCC_BLUE))
             fig_cv.add_trace(go.Bar(x=list(range(1, 6)), y=kf_rf,
-                                    name="Random Forest", marker_color=ECON_RED))
+                                    name="Random Forest", marker_color=CORAL))
             fig_cv.add_hline(y=0, line_color=ECON_GREY, line_width=1)
             fig_cv = econ(
                 fig_cv, title="5-Fold CV - R-squared per fold",
@@ -1525,7 +1582,7 @@ elif page == "Statistical Analysis":
             fig_loo.add_trace(go.Scatter(x=df["Ward"], y=loo_lr, mode="markers+lines",
                                          name="Linear", marker_color=WCC_BLUE, marker_size=8))
             fig_loo.add_trace(go.Scatter(x=df["Ward"], y=loo_rf, mode="markers+lines",
-                                         name="Random Forest", marker_color=ECON_RED, marker_size=8))
+                                         name="Random Forest", marker_color=CORAL, marker_size=8))
             fig_loo.add_hline(y=0, line_color=ECON_GREY, line_dash="dash")
             fig_loo = econ(
                 fig_loo, title="LOO CV - R-squared when each ward is held out",
@@ -1651,7 +1708,7 @@ elif page == "Statistical Analysis":
                 # Bootstrap distribution of AUC differences
                 fig_b = go.Figure(go.Histogram(
                     x=diffs, nbinsx=40, marker_color=WCC_BLUE, opacity=0.75))
-                fig_b.add_vline(x=0, line_color=ECON_RED, line_dash="dash")
+                fig_b.add_vline(x=0, line_color=WCC_BLUE, line_dash="dash")
                 fig_b.add_vrect(x0=ci_lo, x1=ci_hi, fillcolor=WCC_GOLD, opacity=0.15,
                                 annotation_text="95% CI", annotation_position="top left")
                 fig_b = econ(
