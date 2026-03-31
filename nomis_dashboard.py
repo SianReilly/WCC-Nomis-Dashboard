@@ -307,82 +307,25 @@ def load_real_census_from_nomis():
     # Replace PARENT:1946157124 if your Westminster parent code differs.
     parent_filter = "PARENT:1946157124"
 
-    def get_ts066_employment():
-        url = (
-            "https://www.nomisweb.co.uk/api/v01/dataset/NM_2066_1.data.csv"
-            "?time=latest"
-            "&geography=TYPE298"                    # 2022 wards
-            f"&geography_filter={parent_filter}"    # Westminster wards only
-            "&cell=1,2,3,4,5,6,7,8,9"              # all economic activity categories
-            "&measures=20100"                       # value
-            "&select=geography_name,cell_name,obs_value"
+  unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
+
+out = (
+    df.groupby("geography_name")
+    .apply(
+        lambda g: pd.Series(
+            {
+                "Employment Rate": g.loc[
+                    emp_mask & g.index.isin(g.index), "pct"
+                ].sum(),
+                "Unemployment %": g.loc[
+                    unemp_mask & g.index.isin(g.index), "pct"
+                ].sum(),
+            }
         )
-
-        # Defensive load so the app does not crash if Nomis is empty or errors
-        try:
-            df = pd.read_csv(url)
-        except pd.errors.EmptyDataError:
-            st.error(
-                "Nomis returned an empty response for TS066 employment.\n\n"
-                f"URL called:\n{url}\n\n"
-                "Check the dataset code, geography parameters and your Nomis access."
-            )
-            return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
-
-        required_cols = {"geography_name", "cell_name", "obs_value"}
-        if not required_cols.issubset(df.columns):
-            st.error(
-                "Unexpected response format from Nomis for TS066 (employment).\n\n"
-                f"URL called:\n{url}\n\n"
-                "First few rows:\n"
-                f"{df.head().to_string(index=False)}"
-            )
-            return pd.DataFrame(columns=["Ward", "Employment Rate", "Unemployment %"])
-
-        # Convert counts to percentages within each ward
-        tot = df.groupby("geography_name")["obs_value"].transform("sum")
-        df["pct"] = df["obs_value"] / tot * 100
-
-        # Employment = employees + self‑employed
-        emp_mask = df["cell_name"].isin(
-            [
-                "Employee: Full-time",
-                "Employee: Part-time",
-                "Self-employed: With employees",
-                "Self-employed: Without employees",
-            ]
-        )
-        # Unemployment = any category containing 'Unemployed'
-        unemp_mask = df["cell_name"].str.contains("Unemployed", case=False)
-
-                out = (
-            df.groupby("geography_name")
-            .apply(
-                lambda g: pd.Series(
-                    {
-                        "Employment Rate": g.loc[
-                            emp_mask & g.index.isin(g.index), "pct"
-                        ].sum(),
-                        "Unemployment %": g.loc[
-                            unemp_mask & g.index.isin(g.index), "pct"
-                        ].sum(),
-                    }
-                )
-            )
-            .reset_index()
-            .rename(columns={"geography_name": "Ward"})
-        )
-
-        # Normalise '&' vs 'and' so Nomis names match hard-coded ward names
-        def normalise_ward_name(name: str) -> str:
-            if not isinstance(name, str):
-                return name
-            n = name.strip()
-            n = n.replace(" and ", " & ")
-            return n
-
-        out["Ward"] = out["Ward"].apply(normalise_ward_name)
-        return out
+    )
+    .reset_index()
+    .rename(columns={"geography_name": "Ward"})
+)  
         
 
     # Add further helpers (TS067, TS054, etc.) and merge as you extend.
