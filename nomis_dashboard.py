@@ -87,6 +87,8 @@ TOTAL_WARDS_ENGLAND = 6904
 # Nomis API constants - Westminster LA geography code under Nomis
 NOMIS_BASE           = "https://www.nomisweb.co.uk/api/v01/dataset"
 WESTMINSTER_PARENT   = "1946157124"   # Westminster City Council LA code in Nomis
+# Westminster 2022 wards (Nomis geography codes)
+WESTMINSTER_WARD_RANGE = "641734784...641734801"
 
 
 # =============================================================================
