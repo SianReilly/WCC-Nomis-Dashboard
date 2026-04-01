@@ -36,6 +36,9 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import json, os, io, requests, re
+import geopandas as gpd
+
+wards = gpd.read_file("WCC_Wards2022_PBI.json", driver="TopoJSON")
 
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.ensemble import RandomForestRegressor
