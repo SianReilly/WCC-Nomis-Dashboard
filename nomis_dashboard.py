@@ -1465,6 +1465,7 @@ elif page == "Statistical Analysis":
             wards have more similar residuals than random) is theoretically more appropriate.
             DW is used here as a practical proxy, but its results should be interpreted cautiously.<br><br>
 
+            st.markdown(f"""<div class="method-box">
             <b>Shapiro-Wilk test:</b> Tests whether residuals follow a normal distribution.
             Normally distributed residuals are an assumption of OLS inference (p-values, CIs).
             P > 0.05 = cannot reject normality (plausibly normal).
