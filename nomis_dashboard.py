@@ -1814,13 +1814,13 @@ elif page == "Ward Map":
     st.markdown("## Ward Map - IMD 2025 by Geography")
     st.markdown("""<div class="context-banner">
     Boundaries: WCC 2022 ward review. GeoJSON converted from TopoJSON (WCC_Wards2022_WGS84.json).
-    Commit WCC_Wards2022_WGS84.json alongside nomis_dashboard.py to your GitHub repo for deployment.
+    Commit WCC_Wards2022_WGS84.json alongside nomis_dashboard.py to GitHub repo for deployment.
     </div>""", unsafe_allow_html=True)
 
     if geo is None:
         st.error(
             "WCC_Wards2022_WGS84.json not found in the same directory as nomis_dashboard.py. "
-            "Download it from the dashboard build outputs and commit it to your GitHub repo."
+            "Download it from the dashboard build outputs and commit it to GitHub repo."
         )
     else:
         map_var = st.selectbox("Colour map by", [
