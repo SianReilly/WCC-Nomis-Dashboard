@@ -22,7 +22,7 @@ Live Nomis datasets used:
   TS054 (NM_2072_1) - Tenure (housing)
   TS067 (NM_2084_1) - Highest level of qualification
 
-Geography: Westminster wards, TYPE298, PARENT:1946157124
+Geography: Westminster wards, TYPE297, PARENT:1946157124
 Modelled estimates are used as fallback if Nomis is unavailable,
 and for variables not covered by the 5 API tables above.
 """
@@ -211,7 +211,7 @@ def econ_h(fig, title="", subtitle="",
 @st.cache_data(ttl=3600)   # cache for 1 hour so live data stays fresh
 def fetch_nomis(dataset_id: str, category_param: str, measures: str = "20301"):
     """
-    Generic Nomis API fetcher for all Westminster 2022 wards (TYPE298).
+    Generic Nomis API fetcher for all Westminster 2022 wards (TYPE297).
 
     Parameters
     ----------
@@ -227,7 +227,7 @@ def fetch_nomis(dataset_id: str, category_param: str, measures: str = "20301"):
     url = (
         f"{NOMIS_BASE}/{dataset_id}.data.csv"
         f"?date=latest"
-        f"&geography=TYPE298&geography_filter=PARENT:{WESTMINSTER_PARENT}"
+        f"&geography=TYPE297&geography_filter=PARENT:{WESTMINSTER_PARENT}"
         f"&measures={measures}"
     )
     if category_param:
@@ -1925,7 +1925,7 @@ National total: **{TOTAL_WARDS_ENGLAND:,} wards in England** (ONS 2022 boundarie
 
         st.markdown("**Geography parameters used in all API calls:**")
         st.code(
-            f"geography=TYPE298 (2022 wards)\n"
+            f"geography=TYPE297 (2022 wards)\n"
             f"geography_filter=PARENT:{WESTMINSTER_PARENT} (Westminster LA)\n"
             f"Data refreshes every 60 minutes (Streamlit cache TTL=3600)",
             language="text"
@@ -1935,7 +1935,7 @@ National total: **{TOTAL_WARDS_ENGLAND:,} wards in England** (ONS 2022 boundarie
         st.code(
             f"https://www.nomisweb.co.uk/api/v01/dataset/NM_2083_1.data.csv"
             f"?date=latest"
-            f"&geography=TYPE298&geography_filter=PARENT:{WESTMINSTER_PARENT}"
+            f"&geography=TYPE297&geography_filter=PARENT:{WESTMINSTER_PARENT}"
             f"&c2021_eastat_20=1001,1006,1011"
             f"&measures=20301",
             language="text"
@@ -2013,7 +2013,7 @@ import pandas as pd, requests, io
 url = (
     "https://www.nomisweb.co.uk/api/v01/dataset/NM_2083_1.data.csv"
     "?date=latest"
-    "&geography=TYPE298&geography_filter=PARENT:1946157124"
+    "&geography=TYPE297&geography_filter=PARENT:1946157124"
     "&c2021_eastat_20=1001,1006,1011"   # In employment, Unemployed, Inactive
     "&measures=20301"                    # Percentage
 )
