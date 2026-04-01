@@ -696,11 +696,11 @@ def load_industry_mix():
 def load_geojson():
     """
     Load pre-converted GeoJSON for WCC 2022 ward boundaries.
-    File: WCC_Wards2022_PBI.json (converted from WCC_Wards2022_PBI.json TopoJSON).
+    File: WCC_Wards2022_WGS84.json (converted from WCC_Wards2022_PBI.json TopoJSON).
     Must be committed to the same GitHub repo root as this Python file.
     Feature IDs match ward Label property (e.g. "Church Street").
     """
-    geojson_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "WCC_Wards2022_PBI.json")
+    geojson_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "WCC_Wards2022_WGS84.json")
     if os.path.exists(geojson_path):
         with open(geojson_path) as f:
             return json.load(f)
@@ -1813,13 +1813,13 @@ elif page == "Ward Map":
 
     st.markdown("## Ward Map - IMD 2025 by Geography")
     st.markdown("""<div class="context-banner">
-    Boundaries: WCC 2022 ward review. GeoJSON converted from TopoJSON (WCC_Wards2022_PBI.json).
-    Commit WCC_Wards2022_PBI.json alongside nomis_dashboard.py to your GitHub repo for deployment.
+    Boundaries: WCC 2022 ward review. GeoJSON converted from TopoJSON (WCC_Wards2022_WGS84.json).
+    Commit WCC_Wards2022_WGS84.json alongside nomis_dashboard.py to your GitHub repo for deployment.
     </div>""", unsafe_allow_html=True)
 
     if geo is None:
         st.error(
-            "WCC_Wards2022_PBI.json not found in the same directory as nomis_dashboard.py. "
+            "WCC_Wards2022_WGS84.json not found in the same directory as nomis_dashboard.py. "
             "Download it from the dashboard build outputs and commit it to your GitHub repo."
         )
     else:
@@ -1867,7 +1867,7 @@ elif page == "Ward Map":
             st.plotly_chart(fig_bar, use_container_width=True)
 
         st.markdown("""<div class="warn-box">
-        Ward boundary file: converted from WCC_Wards2022_PBI.json (TopoJSON, WCC GIS team).
+        Ward boundary file: converted from WCC_Wards2022_WGS84.json (GeoJSON, WCC S&I team folder).
         Coordinates in WGS84. For high-precision spatial analysis use the original shapefile.
         </div>""", unsafe_allow_html=True)
 
@@ -2063,7 +2063,7 @@ requests
 # Files in repo root:
 # nomis_dashboard.py
 # requirements.txt
-# WCC_Wards2022_PBI.json    <-- download from the build output
+# WCC_Wards2022_WGS84.json    <-- download from the build output
 
 # Deploy: share.streamlit.io > New App > select repo + nomis_dashboard.py
         """, language="bash")
