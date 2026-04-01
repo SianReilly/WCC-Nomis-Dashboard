@@ -285,181 +285,185 @@ def find_cat_col(df: pd.DataFrame) -> str | None:
 
 # =============================================================================
 # LIVE NOMIS DATA LOADER
-# Pulls the 5 Census 2021 tables requested and returns a ward-level DataFrame.
-# Falls back to modelled estimates if any individual API fails.
+# Pulls Census 2021 ward-level data for Westminster directly from Nomis
 # =============================================================================
+
+WESTMINSTER_WARDS = "641734784...641734801"
 
 @st.cache_data(ttl=3600)
 def load_nomis_census():
-    """
-    Load real Census 2021 ward-level data from Nomis for Westminster.
 
-    Datasets:
-      TS066 (NM_2083_1) - Employment rate and unemployment %
-      TS007 (NM_2027_1) - Total population per ward
-      TS037 (NM_2055_1) - Good health % (Very good + Good)
-      TS054 (NM_2072_1) - Tenure (owner occupied, social rented, private rented)
-      TS067 (NM_2084_1) - Qualifications (no quals %, degree level %)
+    status = {}
+    frames = []
 
-    Returns
-    -------
-    (DataFrame with Ward column + real variables, dict of API success flags)
-    """
-    ward_data = {}   # dict of ward_name -> {variable: value}
-    status    = {}   # which datasets successfully loaded
+    def get_category_col(df):
+        for c in df.columns:
+            if c.startswith("C2021_") and c.endswith("_NAME"):
+                return c
+        return None
 
-    def add(ward: str, key: str, value):
-        """Helper to safely add a value to the ward_data dict."""
-        ward_data.setdefault(ward, {})[key] = value
+    def clean(df):
+        df.columns = [c.upper() for c in df.columns]
+        df["GEOGRAPHY_NAME"] = (
+            df["GEOGRAPHY_NAME"]
+            .str.replace(r"\s+[Ww]ard$", "", regex=True)
+            .str.strip()
+        )
+        return df
 
     # ------------------------------------------------------------------
-    # TS066: Economic activity (NM_2083_1)
-    # Categories: 1001=In employment, 1006=Unemployed, 1011=Economically inactive
-    # We request percentages (20301) - Nomis pre-calculates % of 16+ residents
+    # TS007 – Population
     # ------------------------------------------------------------------
-    df66, err66 = fetch_nomis(
-    "NM_2083_1",
-    "c2021_eastat_20=0,1001,1006,1011",
-    "20100"
-)
-    status["TS066"] = df66 is not None and "GEOGRAPHY_NAME" in (df66.columns if df66 is not None else [])
+    df07, err = fetch_nomis("NM_2027_1", "c2021_age_102=0...101", "20100")
+    status["TS007"] = df07 is not None
 
-    if status["TS066"]:
-        cat66 = find_cat_col(df66)
-        if cat66:
-            for ward, grp in df66.groupby("GEOGRAPHY_NAME"):
-                # Employment = any row whose category name contains "In employment"
-                emp_rows = grp[grp[cat66].str.contains("In employment", case=False, na=False)]
-                une_rows = grp[grp[cat66].str.contains("Unemployed", case=False, na=False)]
-                if not emp_rows.empty:
-                    add(ward, "Employment Rate", round(float(emp_rows["OBS_VALUE"].sum()), 1))
-                if not une_rows.empty:
-                    add(ward, "Unemployment %",  round(float(une_rows["OBS_VALUE"].sum()), 1))
-        else:
-            status["TS066"] = False   # no category name column - unusable response
+    if df07 is not None:
+        df07 = clean(df07)
+        cat = get_category_col(df07)
+
+        pop = (
+            df07[df07[cat].str.contains("All usual residents", case=False)]
+            .groupby("GEOGRAPHY_NAME")["OBS_VALUE"]
+            .sum()
+            .reset_index()
+        )
+
+        pop.rename(columns={
+            "GEOGRAPHY_NAME": "Ward",
+            "OBS_VALUE": "Population"
+        }, inplace=True)
+
+        frames.append(pop)
 
     # ------------------------------------------------------------------
-    # TS007: Age by single year (NM_2027_1)
-    # We request all categories (no filter) with counts (20100)
-    # then find the "All usual residents" total row per ward.
-    # If no total row found, sum all individual age counts.
+    # TS066 – Economic activity
     # ------------------------------------------------------------------
-    df07, err07 = fetch_nomis("NM_2027_1", "", "20100")
-    status["TS007"] = df07 is not None and "GEOGRAPHY_NAME" in (df07.columns if df07 is not None else [])
+    df66, err = fetch_nomis("NM_2083_1", "c2021_eastat_20=0,1001,1006,1011", "20100")
+    status["TS066"] = df66 is not None
 
-    if status["TS007"]:
-        cat07 = find_cat_col(df07)
-        for ward, grp in df07.groupby("GEOGRAPHY_NAME"):
-            # Look for a "Total" or "All" row first
-            if cat07:
-                total_rows = grp[grp[cat07].str.lower().str.contains(
-                    r"all usual|all ages|total", na=False)]
-            else:
-                total_rows = pd.DataFrame()
+    if df66 is not None:
+        df66 = clean(df66)
+        cat = get_category_col(df66)
 
-            if not total_rows.empty:
-                pop = int(total_rows["OBS_VALUE"].max())
-            else:
-                # No total row - sum everything (individual single years don't overlap)
-                pop = int(grp["OBS_VALUE"].sum())
+        results = []
 
-            add(ward, "Population", pop)
+        for ward, g in df66.groupby("GEOGRAPHY_NAME"):
 
-    # ------------------------------------------------------------------
-    # TS037: General health (NM_2055_1)
-    # Categories 0=All, 1=Very good, 2=Good, 3=Fair, 4=Bad, 5=Very bad
-    # Good Health % = sum of "Very good health" + "Good health" percentages
-    # As a bonus, derive a Long-term Illness proxy from "Bad" + "Very bad"
-    # ------------------------------------------------------------------
-    df37, err37 = fetch_nomis("NM_2055_1", "c2021_health_6=0...5", "20301")
-    status["TS037"] = df37 is not None and "GEOGRAPHY_NAME" in (df37.columns if df37 is not None else [])
+            total = g[g[cat].str.contains("Total", case=False)]["OBS_VALUE"].sum()
+            emp   = g[g[cat].str.contains("In employment", case=False)]["OBS_VALUE"].sum()
+            unemp = g[g[cat].str.contains("Unemployed", case=False)]["OBS_VALUE"].sum()
 
-    if status["TS037"]:
-        cat37 = find_cat_col(df37)
-        if cat37:
-            for ward, grp in df37.groupby("GEOGRAPHY_NAME"):
-                # Good health = "Very good health" + "Good health" rows
-                good = grp[grp[cat37].str.contains(
-                    r"Very good health|Good health", case=False, na=False)]
-                # Ill health proxy = "Bad health" + "Very bad health"
-                ill  = grp[grp[cat37].str.contains(
-                    r"Bad health|Very bad", case=False, na=False)]
-                if not good.empty:
-                    add(ward, "Good Health %",       round(float(good["OBS_VALUE"].sum()), 1))
-                if not ill.empty:
-                    add(ward, "Long-term Illness %", round(float(ill["OBS_VALUE"].sum()), 1))
-        else:
-            status["TS037"] = False
+            if total > 0:
+                results.append({
+                    "Ward": ward,
+                    "Employment Rate": round(emp / total * 100, 1),
+                    "Unemployment %": round(unemp / total * 100, 1)
+                })
+
+        frames.append(pd.DataFrame(results))
 
     # ------------------------------------------------------------------
-    # TS054: Tenure (NM_2072_1)
-    # Categories include Owned outright, Owned with mortgage,
-    # Social rented (council + other), Private rented
+    # TS037 – Health
     # ------------------------------------------------------------------
-    df54, err54 = fetch_nomis(
-        "NM_2072_1",
-        "c2021_tenure_9=0,1001...1004,8,9996,9997",
-        "20301"
-    )
-    status["TS054"] = df54 is not None and "GEOGRAPHY_NAME" in (df54.columns if df54 is not None else [])
+    df37, err = fetch_nomis("NM_2055_1", "c2021_health_6=0...5", "20100")
+    status["TS037"] = df37 is not None
 
-    if status["TS054"]:
-        cat54 = find_cat_col(df54)
-        if cat54:
-            for ward, grp in df54.groupby("GEOGRAPHY_NAME"):
-                # Owned = "Owned outright" + "Owned with a mortgage or loan"
-                owner   = grp[grp[cat54].str.contains(r"Owned outright|Owned with", case=False, na=False)]
-                # Social = "Social rented: Rented from council" + "Social rented: Other"
-                social  = grp[grp[cat54].str.contains(r"Social rented", case=False, na=False)]
-                # Private rented (excludes social rented)
-                private = grp[grp[cat54].str.contains(r"Private rented", case=False, na=False)]
-                if not owner.empty:
-                    add(ward, "Owner Occupied %",  round(float(owner["OBS_VALUE"].sum()),  1))
-                if not social.empty:
-                    add(ward, "Social Rented %",   round(float(social["OBS_VALUE"].sum()),  1))
-                if not private.empty:
-                    add(ward, "Private Rented %",  round(float(private["OBS_VALUE"].sum()), 1))
-        else:
-            status["TS054"] = False
+    if df37 is not None:
+        df37 = clean(df37)
+        cat = get_category_col(df37)
+
+        rows = []
+
+        for ward, g in df37.groupby("GEOGRAPHY_NAME"):
+
+            total = g[g[cat].str.contains("All", case=False)]["OBS_VALUE"].sum()
+
+            good = g[g[cat].str.contains("Very good|Good health", case=False)]["OBS_VALUE"].sum()
+            ill  = g[g[cat].str.contains("Bad health|Very bad", case=False)]["OBS_VALUE"].sum()
+
+            if total > 0:
+                rows.append({
+                    "Ward": ward,
+                    "Good Health %": round(good / total * 100, 1),
+                    "Long-term Illness %": round(ill / total * 100, 1)
+                })
+
+        frames.append(pd.DataFrame(rows))
 
     # ------------------------------------------------------------------
-    # TS067: Highest level of qualification (NM_2084_1)
-    # Only counts available (measures=20100) - calculate % manually
-    # No Qualifications % = "No qualifications" count / ward total * 100
-    # Degree Level %      = "Level 4 qualifications and above" / total * 100
+    # TS054 – Tenure
     # ------------------------------------------------------------------
-    df67, err67 = fetch_nomis("NM_2084_1", "c2021_hiqual_8=1...7", "20100")
-    status["TS067"] = df67 is not None and "GEOGRAPHY_NAME" in (df67.columns if df67 is not None else [])
+    df54, err = fetch_nomis("NM_2072_1", "c2021_tenure_9=0...8", "20100")
+    status["TS054"] = df54 is not None
 
-    if status["TS067"]:
-        cat67 = find_cat_col(df67)
-        if cat67:
-            for ward, grp in df67.groupby("GEOGRAPHY_NAME"):
-                total = grp["OBS_VALUE"].sum()
-                if total > 0:
-                    nq = grp[grp[cat67].str.contains(r"No qualifications", case=False, na=False)]["OBS_VALUE"].sum()
-                    dg = grp[grp[cat67].str.contains(r"Level 4",           case=False, na=False)]["OBS_VALUE"].sum()
-                    if nq > 0:
-                        add(ward, "No Qualifications %", round(float(nq / total * 100), 1))
-                    if dg > 0:
-                        add(ward, "Degree Level %",      round(float(dg / total * 100), 1))
-        else:
-            status["TS067"] = False
+    if df54 is not None:
+        df54 = clean(df54)
+        cat = get_category_col(df54)
 
-    # Build output DataFrame
-    if ward_data:
-        out = pd.DataFrame.from_dict(ward_data, orient="index").reset_index()
-        out.rename(columns={"index": "Ward"}, inplace=True)
-        # Only trust Nomis results when we got data for most wards (>=15 of 18)
-        for api, ok in status.items():
-            if ok:
-                n_wards_with_data = len(ward_data)
-                if n_wards_with_data < 15:
-                    status[api] = False   # too few wards - something went wrong
-        return out, status
+        rows = []
 
-    return pd.DataFrame(columns=["Ward"]), {k: False for k in status}
+        for ward, g in df54.groupby("GEOGRAPHY_NAME"):
 
+            total   = g[g[cat].str.contains("Total", case=False)]["OBS_VALUE"].sum()
+            owner   = g[g[cat].str.contains("Owned outright|Owned with", case=False)]["OBS_VALUE"].sum()
+            social  = g[g[cat].str.contains("Social rented", case=False)]["OBS_VALUE"].sum()
+            private = g[g[cat].str.contains("Private rented", case=False)]["OBS_VALUE"].sum()
+
+            if total > 0:
+                rows.append({
+                    "Ward": ward,
+                    "Owner Occupied %": round(owner / total * 100, 1),
+                    "Social Rented %": round(social / total * 100, 1),
+                    "Private Rented %": round(private / total * 100, 1)
+                })
+
+        frames.append(pd.DataFrame(rows))
+
+    # ------------------------------------------------------------------
+    # TS067 – Qualifications
+    # ------------------------------------------------------------------
+    df67, err = fetch_nomis("NM_2084_1", "c2021_hiqual_8=0...7", "20100")
+    status["TS067"] = df67 is not None
+
+    if df67 is not None:
+        df67 = clean(df67)
+        cat = get_category_col(df67)
+
+        rows = []
+
+        for ward, g in df67.groupby("GEOGRAPHY_NAME"):
+
+            total = g[g[cat].str.contains("Total", case=False)]["OBS_VALUE"].sum()
+
+            noqual = g[g[cat].str.contains("No qualifications", case=False)]["OBS_VALUE"].sum()
+            degree = g[g[cat].str.contains("Level 4", case=False)]["OBS_VALUE"].sum()
+
+            if total > 0:
+                rows.append({
+                    "Ward": ward,
+                    "No Qualifications %": round(noqual / total * 100, 1),
+                    "Degree Level %": round(degree / total * 100, 1)
+                })
+
+        frames.append(pd.DataFrame(rows))
+
+    # ------------------------------------------------------------------
+    # Merge all datasets
+    # ------------------------------------------------------------------
+    if frames:
+        df = frames[0]
+
+        for f in frames[1:]:
+            df = df.merge(f, on="Ward", how="left")
+
+        if df["Ward"].nunique() < 18:
+            for k in status:
+                status[k] = False
+
+        return df, status
+
+    return pd.DataFrame(columns=["Ward"]), status
+```
 
 # =============================================================================
 # MODELLED CENSUS ESTIMATES (fallback / supplementary)
