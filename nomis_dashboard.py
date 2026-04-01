@@ -1458,18 +1458,18 @@ elif page == "Statistical Analysis":
         with vt1:
             st.markdown("#### Regression Diagnostics - base model")
             st.markdown(f"""<div class="method-box">
-            <b>Durbin-Watson (DW):</b> Tests for autocorrelation in residuals.
+            <p><b>Durbin-Watson (DW):</b> Tests for autocorrelation in residuals.
             Values near 2.0 = no autocorrelation; below 1.5 = positive autocorrelation;
             above 2.5 = negative autocorrelation. DW was designed for time series data.
             For cross-sectional ward data, Moran's I (which tests whether geographically adjacent
             wards have more similar residuals than random) is theoretically more appropriate.
-            DW is used here as a practical proxy, but its results should be interpreted cautiously.<br><br>
+            DW is used here as a practical proxy, but its results should be interpreted cautiously.</p>
 
-            <b>Shapiro-Wilk test:</b> Tests whether residuals follow a normal distribution.
+            <p><b>Shapiro-Wilk test:</b> Tests whether residuals follow a normal distribution.
             Normally distributed residuals are an assumption of OLS inference (p-values, CIs).
             P > 0.05 = cannot reject normality (plausibly normal).
             P &lt; 0.05 = evidence of non-normality, which may invalidate confidence intervals.
-            With n=18, this test has low statistical power to detect mild non-normality.<br><br>
+            With n=18, this test has low statistical power to detect mild non-normality.</p>
 
             <b>Q-Q plot:</b> Visual normality check. Points close to the diagonal line =
             normally distributed residuals. An S-curve pattern suggests skewness;
