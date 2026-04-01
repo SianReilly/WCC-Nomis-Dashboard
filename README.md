@@ -18,7 +18,7 @@ Built as part of a workshop introducing data peeps to Python, Streamlit, and Git
 
 | Section | Description |
 |---|---|
-| 🏠 Overview | Deprivation index by ward, correlation heatmap, Westminster radar chart |
+| 🏠 Overview | Deprivation (IMD) by ward, correlation heatmap, Westminster radar chart |
 | 👥 Demographics | Age profiles vs London average, ethnicity by ward, population scatter |
 | 🏘️ Housing & Tenure | Owner-occupied vs social rented vs private rented by ward, overcrowding analysis |
 | 💼 Economy & Labour | Employment rates, industry mix vs London, education vs employment |
@@ -99,5 +99,4 @@ To deploy your own copy:
 
 ## 👩‍💻 Author
 
-**Sian Reilly** — Westminster City Council  
-Built for a data professionals workshop · March 2026
+**Sian Reilly** — Westminster City Council · March 2026
