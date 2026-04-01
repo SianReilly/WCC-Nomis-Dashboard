@@ -211,33 +211,36 @@ def econ_h(fig, title="", subtitle="",
 # =============================================================================
 
 @st.cache_data(ttl=3600)   # cache for 1 hour so live data stays fresh
-def fetch_nomis(dataset_id: str, category_param: str, measures: str = "20301"):
+@st.cache_data(ttl=3600)
+def fetch_nomis(dataset_id: str, category_param: str, measures: str = "20100"):
     """
-    Generic Nomis API fetcher for all Westminster 2022 wards (TYPE297).
+    Generic Nomis API fetcher for Westminster wards.
 
     Parameters
     ----------
     dataset_id     : Nomis dataset ID e.g. "NM_2083_1"
-    category_param : URL fragment e.g. "c2021_eastat_20=1001,1006,1011"
-                     Pass empty string "" to fetch all categories.
-    measures       : "20301" = percentage (default); "20100" = count
+    category_param : URL fragment e.g. "c2021_eastat_20=0,1001,1006,1011"
+    measures       : "20100" = count (default)
 
-    Returns (DataFrame | None, error_string | None).
-    On success, columns are uppercased and ward names normalised to match
-    the canonical WCC ward list.
+    Returns
+    -------
+    (DataFrame | None, error_string | None)
     """
+
     url = (
         f"{NOMIS_BASE}/{dataset_id}.data.csv"
         f"?date=latest"
-        f"&geography=TYPE297&geography_filter=PARENT:{WESTMINSTER_PARENT}"
+        f"&geography={WESTMINSTER_WARD_RANGE}"
         f"&measures={measures}"
     )
+
     if category_param:
         url += f"&{category_param}"
 
     try:
         resp = requests.get(url, timeout=30)
         resp.raise_for_status()
+
         if not resp.text.strip():
             return None, "Nomis returned empty response"
 
@@ -245,24 +248,21 @@ def fetch_nomis(dataset_id: str, category_param: str, measures: str = "20301"):
         if df.empty:
             return None, "Nomis CSV has no data rows"
 
-        # Normalise column headers to uppercase for consistent access
+        # Standardise column names
         df.columns = [c.strip().upper() for c in df.columns]
 
-        # Normalise ward names to match WCC canonical list:
-        # Strip trailing " Ward" (Nomis sometimes adds this)
-        # Convert " and " -> " & " for Knightsbridge & Belgravia etc.
+        # Clean ward names
         if "GEOGRAPHY_NAME" in df.columns:
             df["GEOGRAPHY_NAME"] = (
                 df["GEOGRAPHY_NAME"]
                 .str.strip()
                 .str.replace(r"\s+[Ww]ard$", "", regex=True)
-                .str.replace(" and ", " & ", regex=False)
-                .str.replace(" And ", " & ", regex=False)
             )
+
         return df, None
 
     except requests.exceptions.Timeout:
-        return None, "Nomis API timed out (30s)"
+        return None, "Nomis API timed out"
     except requests.exceptions.HTTPError as e:
         return None, f"Nomis HTTP error: {e}"
     except pd.errors.EmptyDataError:
