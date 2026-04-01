@@ -1,8 +1,8 @@
 # 🏛️ WCC Census Dashboard
 
-An interactive data dashboard built with Python and Streamlit, exploring **Westminster City Council** ward-level data from the **ONS Census 2021** via the Nomis API.
+An interactive data dashboard built with Python and Streamlit, exploring **Westminster City Council** ward-level data from the **ONS Census 2021** via the Nomis API / modelled Nomis data if the API fails.
 
-Built as part of a workshop introducing data professionals to Python, Streamlit, and GitHub.
+Built as part of a workshop introducing data peeps to Python, Streamlit, and GitHub.
 
 ---
 
