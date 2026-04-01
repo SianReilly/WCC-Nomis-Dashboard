@@ -317,7 +317,11 @@ def load_nomis_census():
     # Categories: 1001=In employment, 1006=Unemployed, 1011=Economically inactive
     # We request percentages (20301) - Nomis pre-calculates % of 16+ residents
     # ------------------------------------------------------------------
-    df66, err66 = fetch_nomis("NM_2083_1", "c2021_eastat_20=1001,1006,1011", "20301")
+    df66, err66 = fetch_nomis(
+    "NM_2083_1",
+    "c2021_eastat_20=0,1001,1006,1011",
+    "20100"
+)
     status["TS066"] = df66 is not None and "GEOGRAPHY_NAME" in (df66.columns if df66 is not None else [])
 
     if status["TS066"]:
