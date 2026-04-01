@@ -685,11 +685,11 @@ def load_industry_mix():
 def load_geojson():
     """
     Load pre-converted GeoJSON for WCC 2022 ward boundaries.
-    File: wcc_wards.geojson (converted from WCC_Wards2022_PBI.json TopoJSON).
+    File: WCC_Wards2022_PBI.json (converted from WCC_Wards2022_PBI.json TopoJSON).
     Must be committed to the same GitHub repo root as this Python file.
     Feature IDs match ward Label property (e.g. "Church Street").
     """
-    geojson_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wcc_wards.geojson")
+    geojson_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "WCC_Wards2022_PBI.json")
     if os.path.exists(geojson_path):
         with open(geojson_path) as f:
             return json.load(f)
@@ -1803,12 +1803,12 @@ elif page == "Ward Map":
     st.markdown("## Ward Map - IMD 2025 by Geography")
     st.markdown("""<div class="context-banner">
     Boundaries: WCC 2022 ward review. GeoJSON converted from TopoJSON (WCC_Wards2022_PBI.json).
-    Commit wcc_wards.geojson alongside nomis_dashboard.py to your GitHub repo for deployment.
+    Commit WCC_Wards2022_PBI.json alongside nomis_dashboard.py to your GitHub repo for deployment.
     </div>""", unsafe_allow_html=True)
 
     if geo is None:
         st.error(
-            "wcc_wards.geojson not found in the same directory as nomis_dashboard.py. "
+            "WCC_Wards2022_PBI.json not found in the same directory as nomis_dashboard.py. "
             "Download it from the dashboard build outputs and commit it to your GitHub repo."
         )
     else:
@@ -2052,7 +2052,7 @@ requests
 # Files in repo root:
 # nomis_dashboard.py
 # requirements.txt
-# wcc_wards.geojson    <-- download from the build output
+# WCC_Wards2022_PBI.json    <-- download from the build output
 
 # Deploy: share.streamlit.io > New App > select repo + nomis_dashboard.py
         """, language="bash")
