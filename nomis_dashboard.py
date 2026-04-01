@@ -463,7 +463,7 @@ def load_nomis_census():
         return df, status
 
     return pd.DataFrame(columns=["Ward"]), status
-```
+
 
 # =============================================================================
 # MODELLED CENSUS ESTIMATES (fallback / supplementary)
