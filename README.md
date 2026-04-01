@@ -8,7 +8,7 @@ Built as part of a workshop introducing data peeps to Python, Streamlit, and Git
 
 ## 🚀 Live App
 
-👉 [View the dashboard on Streamlit]([https://your-app-name.streamlit.app](https://wcc-nomis-dashboard-eeffzqhvjdpwcdic6phqju.streamlit.app/))
+👉 [View the dashboard on Streamlit]([https://your-app-name.streamlit.app](https://wcc-nomis-dashboard-eeffzqhvjdpwcdic6phqju.streamlit.app/])
 
 ---
 
